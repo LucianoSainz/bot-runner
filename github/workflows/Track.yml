@@ -1,0 +1,50 @@
+name: Bot Centinela - Seguimiento de Resultados
+on:
+  schedule:
+    # Una vez por día, a las 21:30 UTC (después del cierre de Wall Street)
+    - cron: '30 21 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Repo Privado (código real)
+        uses: actions/checkout@v4
+        with:
+          repository: LucianoSainz/AgentBot
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Evaluar resultados de señales pasadas
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python track_resultados.py
+
+      - name: Guardar log actualizado
+        run: |
+          git config --global user.name "bot-centinela"
+          git config --global user.email "bot-centinela@users.noreply.github.com"
+          if [ -f señales_log.csv ]; then
+            git add señales_log.csv
+          fi
+          if [ -f circuit_breaker_estado.json ]; then
+            git add circuit_breaker_estado.json
+          fi
+          git diff --staged --quiet || git commit -m "Actualiza resultados de señales y circuit breaker [skip ci]"
+          git push

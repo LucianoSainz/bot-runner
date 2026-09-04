@@ -1,0 +1,50 @@
+name: Bot Centinela - Cripto
+on:
+  schedule:
+    # Cada hora, TODOS los días (cripto opera 24/7, no solo horario bursátil).
+    # Minuto 13 (no :00) para evitar el embudo de workflows de GitHub en el minuto en punto.
+    - cron: '13 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repo Privado (código real)
+        uses: actions/checkout@v4
+        with:
+          repository: LucianoSainz/AgentBot
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Bot Cripto
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python index_cripto.py
+
+      - name: Guardar estado y log de señales
+        run: |
+          git config --global user.name "bot-centinela"
+          git config --global user.email "bot-centinela@users.noreply.github.com"
+          git add estado_alertas.json
+          if [ -f señales_log.csv ]; then
+            git add señales_log.csv
+          fi
+          git diff --staged --quiet || git commit -m "Actualiza estado y log de señales (cripto) [skip ci]"
+          git push
