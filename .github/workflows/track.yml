@@ -16,7 +16,7 @@ jobs:
       - name: Checkout Repo Privado (código real)
         uses: actions/checkout@v4
         with:
-          repository: LucianoSainz/AgentBot
+          repository: TU_USUARIO/TU_REPO_PRIVADO
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
 
       - name: Setup Python
@@ -46,5 +46,13 @@ jobs:
           if [ -f circuit_breaker_estado.json ]; then
             git add circuit_breaker_estado.json
           fi
-          git diff --staged --quiet || git commit -m "Actualiza resultados de señales y circuit breaker [skip ci]"
-          git push
+          if git diff --staged --quiet; then
+            echo "Sin cambios para commitear."
+          else
+            git commit -m "Actualiza resultados de señales y circuit breaker [skip ci]"
+            for intento in 1 2 3 4 5; do
+              git pull --rebase origin main && git push && break
+              echo "Push rechazado (intento $intento), reintentando..."
+              sleep $((RANDOM % 8 + 3))
+            done
+          fi
