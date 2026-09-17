@@ -16,7 +16,7 @@ jobs:
       - name: Checkout Repo Privado (código real)
         uses: actions/checkout@v4
         with:
-          repository: TU_USUARIO/TU_REPO_PRIVADO
+          repository: LucianoSainz/AgentBot
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
 
       - name: Setup Python
