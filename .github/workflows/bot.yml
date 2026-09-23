@@ -1,62 +1,29 @@
 name: Bot Centinela 10x
 on:
   schedule:
-    # Se ejecuta cada hora, de 13:00 a 21:00 UTC, de lunes a viernes (1-5)
-    # Corre en el minuto 7 (no en :00) para evitar el embudo de miles de workflows
-    # que GitHub recibe justo en el minuto en punto de cada hora.
     - cron: '7 13-21 * * 1-5'
-  workflow_dispatch:      # Permite que sigas ejecutándolo manualmente cuando quieras
-
-permissions:
-  contents: write         # Necesario para poder commitear el estado y el log de señales de vuelta al repo
-
+  workflow_dispatch:
+permissions: {contents: write}
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout Repo Privado (código real)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: LucianoSainz/AgentBot
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run Bot
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Ejecutar bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python index.py
-
-      - name: Guardar estado y log de señales
+      - name: Guardar cambios
         run: |
-          git config --global user.name "bot-centinela"
-          git config --global user.email "bot-centinela@users.noreply.github.com"
-          git add estado_alertas.json
-          if [ -f señales_log.csv ]; then
-            git add señales_log.csv
-          fi
-          if git diff --staged --quiet; then
-            echo "Sin cambios para commitear."
-          else
-            git commit -m "Actualiza estado y log de señales [skip ci]"
-            for intento in 1 2 3 4 5; do
-              git pull --rebase origin main && git push && break
-              echo "Push rechazado (intento $intento), reintentando..."
-              sleep $((RANDOM % 8 + 3))
-            done
-          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add estado_alertas.json señales_log.csv
+          git diff --cached --quiet || (git commit -m 'Actualizar señales' && git pull --rebase origin main && git push origin HEAD:main)
