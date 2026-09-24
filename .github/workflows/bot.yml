@@ -1,29 +1,92 @@
-name: Bot Centinela 10x
+name: Bot Centinela 10X
+
 on:
+
   schedule:
-    - cron: '7 13-21 * * 1-5'
+    - cron: "*/5 * * * *"
+
   workflow_dispatch:
-permissions: {contents: write}
+
+
+# Evita dos ejecuciones simultáneas
+concurrency:
+  group: bot-centinela-10x
+  cancel-in-progress: false
+
+
+permissions:
+  contents: write
+
+
 jobs:
-  build:
+
+  ejecutar-bot:
+
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
+
+      # ======================================================
+      # DESCARGAR REPOSITORIO
+      # ======================================================
+
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
         with:
-          repository: LucianoSainz/AgentBot
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.11'}
-      - run: pip install -r requirements.txt
-      - name: Ejecutar bot
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python index.py
-      - name: Guardar cambios
+          fetch-depth: 0
+
+
+      # ======================================================
+      # PYTHON
+      # ======================================================
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      # ======================================================
+      # DEPENDENCIAS
+      # ======================================================
+
+      - name: Instalar dependencias
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          python -m pip install --upgrade pip
+
+          pip install -r requirements.txt
+
+
+      # ======================================================
+      # EJECUTAR BOT
+      # ======================================================
+
+      - name: Ejecutar Bot Centinela 10X
+        env:
+
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+        run: |
+
+          python index.py
+
+
+      # ======================================================
+      # GUARDAR ESTADO
+      # ======================================================
+
+      - name: Guardar estado del bot
+        run: |
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add estado_alertas.json señales_log.csv
-          git diff --cached --quiet || (git commit -m 'Actualizar señales' && git pull --rebase origin main && git push origin HEAD:main)
+
+          git diff --cached --quiet || git commit -m "Actualizar estado Bot Centinela 10X"
+
+          git push
