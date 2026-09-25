@@ -27,8 +27,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # ============================================================
-      # 1. DESCARGAR REPOSITORIO PRIVADO
+      # DESCARGAR REPOSITORIO PRIVADO
       # ============================================================
       - name: Descargar AgentBot privado
         uses: actions/checkout@v4
@@ -38,7 +39,7 @@ jobs:
           fetch-depth: 0
 
       # ============================================================
-      # 2. CONFIGURAR PYTHON
+      # CONFIGURAR PYTHON
       # ============================================================
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -46,29 +47,33 @@ jobs:
           python-version: "3.11"
 
       # ============================================================
-      # 3. COMPROBAR ARCHIVOS
+      # COMPROBAR ARCHIVOS
       # ============================================================
       - name: Comprobar archivos del repositorio
         run: |
           echo "============================================"
-          echo "DIRECTORIO ACTUAL"
+          echo "BOT CENTINELA 10X"
           echo "============================================"
-          pwd
-
           echo ""
-          echo "============================================"
-          echo "ARCHIVOS"
-          echo "============================================"
-          ls -la
-
+          echo "Directorio actual:"
+          pwd
+          echo ""
+          echo "Archivos del repositorio:"
+          ls -lah
           echo ""
           echo "============================================"
           echo "REQUIREMENTS.TXT"
           echo "============================================"
-          cat requirements.txt
+
+          if [ -f requirements.txt ]; then
+            cat requirements.txt
+          else
+            echo "ERROR: No existe requirements.txt"
+            exit 1
+          fi
 
       # ============================================================
-      # 4. INSTALAR DEPENDENCIAS
+      # INSTALAR DEPENDENCIAS
       # ============================================================
       - name: Instalar dependencias
         run: |
@@ -76,11 +81,7 @@ jobs:
           python -m pip install -r ./requirements.txt
 
       # ============================================================
-      # 5. EJECUTAR BOT NORMAL
-      #
-      # Solo se ejecuta:
-      # - automáticamente con cron
-      # - manualmente si modo=bot
+      # EJECUTAR BOT NORMAL
       # ============================================================
       - name: Ejecutar Bot Centinela 10X
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
@@ -91,13 +92,12 @@ jobs:
           echo "============================================"
           echo "🤖 EJECUTANDO BOT CENTINELA 10X"
           echo "============================================"
+          echo ""
 
           python index.py
 
       # ============================================================
-      # 6. EJECUTAR BACKTEST
-      #
-      # Solo se ejecuta manualmente seleccionando modo=backtest
+      # EJECUTAR BACKTEST
       # ============================================================
       - name: Ejecutar Backtest V3
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
@@ -106,13 +106,14 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           echo "============================================"
-          echo "📊 BOT CENTINELA 10X — BACKTEST V3"
+          echo "📊 BOT CENTINELA 10X - BACKTEST V3"
           echo "============================================"
+          echo ""
 
           python backtest.py
 
       # ============================================================
-      # 7. MOSTRAR RESULTADOS DEL BACKTEST
+      # MOSTRAR RESULTADOS DEL BACKTEST
       # ============================================================
       - name: Mostrar archivos generados
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
@@ -120,13 +121,15 @@ jobs:
           echo "============================================"
           echo "📁 ARCHIVOS GENERADOS"
           echo "============================================"
+          echo ""
 
           ls -lah backtest_*.csv 2>/dev/null || true
 
           echo ""
           echo "============================================"
-          echo "📊 RESUMEN"
+          echo "📊 RESUMEN DEL BACKTEST"
           echo "============================================"
+          echo ""
 
           if [ -f backtest_resumen.csv ]; then
             cat backtest_resumen.csv
@@ -134,10 +137,34 @@ jobs:
             echo "No se encontró backtest_resumen.csv"
           fi
 
+          echo ""
+          echo "============================================"
+          echo "📈 TRADES"
+          echo "============================================"
+
+          if [ -f backtest_trades.csv ]; then
+            echo "backtest_trades.csv encontrado"
+            wc -l backtest_trades.csv
+          else
+            echo "No se encontró backtest_trades.csv"
+          fi
+
+          echo ""
+          echo "============================================"
+          echo "📦 RESULTADOS"
+          echo "============================================"
+
+          if [ -f backtest_resultados.csv ]; then
+            echo "backtest_resultados.csv encontrado"
+            wc -l backtest_resultados.csv
+          else
+            echo "No se encontró backtest_resultados.csv"
+          fi
+
       # ============================================================
-      # 8. GUARDAR RESULTADOS DEL BACKTEST COMO ARTIFACT
+      # GUARDAR RESULTADOS DEL BACKTEST COMO ARTIFACT
       # ============================================================
-              - name: Guardar resultados del backtest
+      - name: Guardar resultados del backtest
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
         uses: actions/upload-artifact@v4
         with:
@@ -150,18 +177,36 @@ jobs:
           retention-days: 90
 
       # ============================================================
-      # 9. GUARDAR ESTADO DEL BOT
-      #
-      # Solo para la ejecución normal del bot.
+      # GUARDAR ESTADO DEL BOT
       # ============================================================
       - name: Guardar estado del bot
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
         run: |
+          echo "============================================"
+          echo "💾 GUARDANDO ESTADO DEL BOT"
+          echo "============================================"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add estado_alertas.json señales_log.csv circuit_breaker_estado.json
+          # Añadir todos los archivos de estado que existan
+          git add estado_alertas.json 2>/dev/null || true
+          git add señales_log.csv 2>/dev/null || true
+          git add circuit_breaker_estado.json 2>/dev/null || true
 
-          git diff --cached --quiet || git commit -m "Actualizar estado Bot Centinela 10X"
+          # Comprobar si hay cambios
+          if git diff --cached --quiet; then
+            echo "No hay cambios de estado que guardar."
+          else
+            echo "Cambios detectados. Creando commit..."
 
-          git push
+            git commit -m "Actualizar estado Bot Centinela 10X"
+
+            echo "Enviando cambios al repositorio..."
+
+            git push
+          fi
+
+          echo "============================================"
+          echo "✅ ESTADO GUARDADO"
+          echo "============================================"
