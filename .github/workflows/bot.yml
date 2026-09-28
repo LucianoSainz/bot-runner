@@ -1,4 +1,4 @@
-name: Bot Centinela 10X V6
+name: Bot Centinela 10X V6.2
 
 on:
   schedule:
@@ -44,7 +44,7 @@ jobs:
       - name: Comprobar archivos
         run: |
           echo "============================================"
-          echo "BOT CENTINELA 10X V6"
+          echo "BOT CENTINELA 10X V6.2"
           echo "============================================"
           pwd
           ls -lah
@@ -61,7 +61,7 @@ jobs:
           python -m py_compile index.py backtest.py mercados.py
           echo "✅ Sintaxis Python correcta"
 
-      - name: Ejecutar Bot Centinela 10X V6
+      - name: Ejecutar Bot Centinela 10X V6.2
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -99,10 +99,13 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      # IMPORTANTE: el estado de Telegram se guarda SIEMPRE después de
+      # procesar index.py. Así la siguiente ejecución recibe el offset nuevo.
       - name: Guardar estado del bot
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
         run: |
           set -e
+
           git config user.name "bot-centinela"
           git config user.email "bot-centinela@users.noreply.github.com"
 
@@ -113,7 +116,10 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Actualizar estado Bot Centinela 10X V6"
+          git commit -m "Actualizar estado Bot Centinela 10X V6.2"
+
+          # Sincronizamos antes de publicar para evitar 'fetch first'.
+          # Nunca usamos force push.
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
