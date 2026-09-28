@@ -1,4 +1,4 @@
-name: Bot Centinela 10X V6.2
+name: Bot Centinela 10X V6.3
 
 on:
   schedule:
@@ -44,7 +44,7 @@ jobs:
       - name: Comprobar archivos
         run: |
           echo "============================================"
-          echo "BOT CENTINELA 10X V6.2"
+          echo "BOT CENTINELA 10X V6.3"
           echo "============================================"
           pwd
           ls -lah
@@ -61,7 +61,7 @@ jobs:
           python -m py_compile index.py backtest.py mercados.py
           echo "✅ Sintaxis Python correcta"
 
-      - name: Ejecutar Bot Centinela 10X V6.2
+      - name: Ejecutar Bot Centinela 10X V6.3
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -99,8 +99,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      # IMPORTANTE: el estado de Telegram se guarda SIEMPRE después de
-      # procesar index.py. Así la siguiente ejecución recibe el offset nuevo.
       - name: Guardar estado del bot
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
         run: |
@@ -109,17 +107,26 @@ jobs:
           git config user.name "bot-centinela"
           git config user.email "bot-centinela@users.noreply.github.com"
 
-          git add -A -- estado_alertas.json señales_log.csv circuit_breaker_estado.json 2>/dev/null || true
+          # Los archivos principales siempre se añaden por separado para que
+          # la ausencia de circuit_breaker_estado.json no bloquee el commit.
+          git add -A -- estado_alertas.json señales_log.csv
+
+          if [ -f circuit_breaker_estado.json ]; then
+            git add -A -- circuit_breaker_estado.json
+          fi
+
+          echo "===== ESTADO GIT ====="
+          git status --short
 
           if git diff --cached --quiet; then
             echo "No hay cambios de estado para guardar."
             exit 0
           fi
 
-          git commit -m "Actualizar estado Bot Centinela 10X V6.2"
+          git commit -m "Actualizar estado Bot Centinela 10X V6.3"
 
-          # Sincronizamos antes de publicar para evitar 'fetch first'.
-          # Nunca usamos force push.
+          # El checkout tiene fetch-depth 0. Sincronizamos antes de publicar
+          # para evitar el error 'fetch first'. Nunca usamos force push.
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
