@@ -51,10 +51,32 @@ jobs:
           echo "---- requirements.txt ----"
           cat requirements.txt
 
-      - name: Instalar dependencias
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          - name: Instalar dependencias
+            run: |
+            set -e
+
+            python -m pip install --upgrade pip
+
+            for intento in 1 2 3 4 5; do
+            echo "============================================"
+            echo "Instalación de dependencias - intento $intento/5"
+            echo "============================================"
+
+            if python -m pip install \
+            --disable-pip-version-check \
+            --default-timeout=60 \
+            --retries=10 \
+            -r requirements.txt; then
+            echo "✅ Dependencias instaladas correctamente"
+            exit 0
+            fi
+
+          echo "⚠️ Falló el intento $intento. Esperando antes de reintentar..."
+          sleep 15
+          done
+
+          echo "❌ No se pudieron instalar las dependencias después de 5 intentos."
+          exit 1
 
       - name: Comprobar sintaxis Python
         run: |
