@@ -41,14 +41,9 @@ jobs:
 
       - name: Comprobar archivos
         run: |
-          echo "============================================"
-          echo "BOT CENTINELA 10X"
-          echo "============================================"
           pwd
-          echo ""
-          ls -lah
-          echo ""
-          echo "requirements.txt:"
+          ls -la
+          echo "---- requirements.txt ----"
           cat requirements.txt
 
       - name: Instalar dependencias
@@ -56,60 +51,43 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Comprobar sintaxis Python
-        run: |
-          python -m py_compile index.py backtest.py mercados.py
-          echo "✅ Sintaxis Python correcta"
-
-      - name: Ejecutar Bot Centinela 10X
+      - name: Ejecutar Bot Centinela 10X V5
         if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          echo "============================================"
-          echo "🤖 EJECUTANDO BOT CENTINELA 10X"
-          echo "============================================"
           python index.py
 
-      - name: Ejecutar Backtest V4
+      - name: Ejecutar Backtest V5
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          echo "============================================"
-          echo "📊 BOT CENTINELA 10X — BACKTEST V4"
-          echo "============================================"
           python backtest.py
 
-      - name: Mostrar resultados del backtest
+      - name: Mostrar resultados
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
         run: |
-          echo "============================================"
-          echo "📁 ARCHIVOS GENERADOS"
-          echo "============================================"
-          ls -lah backtest_*.csv 2>/dev/null || true
+          echo "===== backtest_resumen.csv ====="
+          test -f backtest_resumen.csv && cat backtest_resumen.csv || true
           echo ""
-          echo "============================================"
-          echo "📊 RESUMEN"
-          echo "============================================"
-          if [ -f backtest_resumen.csv ]; then
-            cat backtest_resumen.csv
-          else
-            echo "No se encontró backtest_resumen.csv"
-          fi
+          echo "===== backtest_comparacion_v5.csv ====="
+          test -f backtest_comparacion_v5.csv && cat backtest_comparacion_v5.csv || true
+          echo ""
+          ls -lah backtest_*.csv 2>/dev/null || true
 
       - name: Guardar resultados del backtest
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
         uses: actions/upload-artifact@v4
         with:
-          name: bot-centinela-backtest-${{ github.run_number }}
+          name: bot-centinela-backtest-v5-${{ github.run_number }}
           path: |
-            backtest_resultados.csv
             backtest_trades.csv
             backtest_resumen.csv
-          if-no-files-found: warn
+            backtest_comparacion_v5.csv
+          if-no-files-found: error
           retention-days: 90
 
       - name: Guardar estado del bot
@@ -117,12 +95,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add -A -- estado_alertas.json señales_log.csv circuit_breaker_estado.json
-
-          if git diff --cached --quiet; then
-            echo "ℹ️ No hay cambios de estado para guardar."
-          else
-            git commit -m "Actualizar estado Bot Centinela 10X"
-            git push
-          fi
+          git add -A -- estado_alertas.json señales_log.csv circuit_breaker_estado.json 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "Actualizar estado Bot Centinela 10X V5"
+          git push
