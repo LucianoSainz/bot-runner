@@ -1,3 +1,4 @@
+
 name: Bot Centinela 10X V6.3
 
 on:
@@ -27,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Descargar AgentBot privado
         uses: actions/checkout@v4
         with:
@@ -46,41 +48,64 @@ jobs:
           echo "============================================"
           echo "BOT CENTINELA 10X V6.3"
           echo "============================================"
+          echo ""
           pwd
+          echo ""
           ls -lah
+          echo ""
           echo "---- requirements.txt ----"
           cat requirements.txt
 
-          - name: Instalar dependencias
-            run: |
-            set -e
+      - name: Instalar dependencias
+        run: |
+          set -e
 
-            python -m pip install --upgrade pip
+          echo "============================================"
+          echo "INSTALANDO DEPENDENCIAS"
+          echo "============================================"
 
-            for intento in 1 2 3 4 5; do
+          python -m pip install --upgrade pip
+
+          for intento in 1 2 3 4 5; do
             echo "============================================"
             echo "Instalación de dependencias - intento $intento/5"
             echo "============================================"
 
             if python -m pip install \
-            --disable-pip-version-check \
-            --default-timeout=60 \
-            --retries=10 \
-            -r requirements.txt; then
-            echo "✅ Dependencias instaladas correctamente"
-            exit 0
+              --disable-pip-version-check \
+              --default-timeout=60 \
+              --retries=10 \
+              -r requirements.txt; then
+
+              echo "============================================"
+              echo "✅ Dependencias instaladas correctamente"
+              echo "============================================"
+              break
             fi
 
-          echo "⚠️ Falló el intento $intento. Esperando antes de reintentar..."
-          sleep 15
-          done
+            if [ "$intento" -eq 5 ]; then
+              echo "============================================"
+              echo "❌ No se pudieron instalar las dependencias"
+              echo "después de 5 intentos."
+              echo "============================================"
+              exit 1
+            fi
 
-          echo "❌ No se pudieron instalar las dependencias después de 5 intentos."
-          exit 1
+            echo "⚠️ Falló el intento $intento."
+            echo "Esperando 15 segundos antes de reintentar..."
+            sleep 15
+          done
 
       - name: Comprobar sintaxis Python
         run: |
-          python -m py_compile index.py backtest.py mercados.py
+          set -e
+
+          echo "============================================"
+          echo "COMPROBANDO SINTAXIS PYTHON"
+          echo "============================================"
+
+          python -m py_compile index.py estrategia.py mercados.py backtest.py
+
           echo "✅ Sintaxis Python correcta"
 
       - name: Ejecutar Bot Centinela 10X V6.3
@@ -88,24 +113,29 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python index.py
+        run: |
+          python index.py
 
       - name: Ejecutar Backtest V6
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python backtest.py
+        run: |
+          python backtest.py
 
       - name: Mostrar resultados V6
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
         run: |
           echo "===== COMPARACION V6 ====="
           test -f backtest_comparacion_v6.csv && cat backtest_comparacion_v6.csv || true
+
           echo ""
           echo "===== DIAGNOSTICO V6 ====="
           test -f backtest_diagnostico_v6.csv && cat backtest_diagnostico_v6.csv || true
+
           echo ""
+          echo "===== ARCHIVOS BACKTEST V6 ====="
           ls -lah backtest_*v6.csv 2>/dev/null || true
 
       - name: Guardar resultados del backtest
@@ -126,17 +156,20 @@ jobs:
         run: |
           set -e
 
+          echo "============================================"
+          echo "GUARDANDO ESTADO DEL BOT"
+          echo "============================================"
+
           git config user.name "bot-centinela"
           git config user.email "bot-centinela@users.noreply.github.com"
 
-          # Los archivos principales siempre se añaden por separado para que
-          # la ausencia de circuit_breaker_estado.json no bloquee el commit.
           git add -A -- estado_alertas.json señales_log.csv
 
           if [ -f circuit_breaker_estado.json ]; then
             git add -A -- circuit_breaker_estado.json
           fi
 
+          echo ""
           echo "===== ESTADO GIT ====="
           git status --short
 
@@ -147,8 +180,16 @@ jobs:
 
           git commit -m "Actualizar estado Bot Centinela 10X V6.3"
 
-          # El checkout tiene fetch-depth 0. Sincronizamos antes de publicar
-          # para evitar el error 'fetch first'. Nunca usamos force push.
+          echo ""
+          echo "===== SINCRONIZANDO CON MAIN ====="
+
           git fetch origin main
           git rebase origin/main
+
+          echo ""
+          echo "===== PUBLICANDO ESTADO ====="
+
           git push origin HEAD:main
+
+          echo ""
+          echo "✅ Estado guardado correctamente."
