@@ -1,195 +1,69 @@
 
-name: Bot Centinela 10X V6.3
-
+name: Bot Centinela 10x
 on:
- // schedule:
-    //- cron: "*/5 * * * *"
-
-  workflow_dispatch:
-    inputs:
-      modo:
-        description: "Selecciona qué quieres ejecutar"
-        required: true
-        default: "bot"
-        type: choice
-        options:
-          - bot
-          - backtest
-
-concurrency:
-  group: bot-centinela-10x
-  cancel-in-progress: false
+  schedule:
+    # Se ejecuta cada hora, de 13:00 a 21:00 UTC, de lunes a viernes (1-5)
+    # Corre en el minuto 7 (no en :00) para evitar el embudo de miles de workflows
+    # que GitHub recibe justo en el minuto en punto de cada hora.
+    - cron: '7 13-21 * * 1-5'
+  workflow_dispatch:      # Permite que sigas ejecutándolo manualmente cuando quieras
 
 permissions:
-  contents: write
+  contents: write         # Necesario para poder commitear el estado y el log de señales de vuelta al repo
+
+# Si el cron nativo y el disparador externo coinciden, las corridas se ejecutan una detrás
+# de la otra (no en paralelo), así la segunda ya ve el estado actualizado y no duplica alertas.
+concurrency:
+  group: bot-centinela-acciones
+  cancel-in-progress: false
 
 jobs:
-  ejecutar-bot:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-
-      - name: Descargar AgentBot privado
+      - name: Checkout Repo Privado (código real)
         uses: actions/checkout@v4
         with:
           repository: LucianoSainz/AgentBot
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
-          ref: main
-          fetch-depth: 0
-          persist-credentials: true
 
-      - name: Configurar Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Comprobar archivos
+      - name: Install dependencies
         run: |
-          echo "============================================"
-          echo "BOT CENTINELA 10X V6.3"
-          echo "============================================"
-          echo ""
-          pwd
-          echo ""
-          ls -lah
-          echo ""
-          echo "---- requirements.txt ----"
-          cat requirements.txt
-
-      - name: Instalar dependencias
-        run: |
-          set -e
-
-          echo "============================================"
-          echo "INSTALANDO DEPENDENCIAS"
-          echo "============================================"
-
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-          for intento in 1 2 3 4 5; do
-            echo "============================================"
-            echo "Instalación de dependencias - intento $intento/5"
-            echo "============================================"
-
-            if python -m pip install \
-              --disable-pip-version-check \
-              --default-timeout=60 \
-              --retries=10 \
-              -r requirements.txt; then
-
-              echo "============================================"
-              echo "✅ Dependencias instaladas correctamente"
-              echo "============================================"
-              break
-            fi
-
-            if [ "$intento" -eq 5 ]; then
-              echo "============================================"
-              echo "❌ No se pudieron instalar las dependencias"
-              echo "después de 5 intentos."
-              echo "============================================"
-              exit 1
-            fi
-
-            echo "⚠️ Falló el intento $intento."
-            echo "Esperando 15 segundos antes de reintentar..."
-            sleep 15
-          done
-
-      - name: Comprobar sintaxis Python
-        run: |
-          set -e
-
-          echo "============================================"
-          echo "COMPROBANDO SINTAXIS PYTHON"
-          echo "============================================"
-
-          python -m py_compile index.py estrategia.py mercados.py backtest.py
-
-          echo "✅ Sintaxis Python correcta"
-
-      - name: Ejecutar Bot Centinela 10X V6.3
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
+      - name: Run Bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python index.py
+
+      - name: Guardar estado y log de señales
         run: |
-          python index.py
-
-      - name: Ejecutar Backtest V6
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python backtest.py
-
-      - name: Mostrar resultados V6
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
-        run: |
-          echo "===== COMPARACION V6 ====="
-          test -f backtest_comparacion_v6.csv && cat backtest_comparacion_v6.csv || true
-
-          echo ""
-          echo "===== DIAGNOSTICO V6 ====="
-          test -f backtest_diagnostico_v6.csv && cat backtest_diagnostico_v6.csv || true
-
-          echo ""
-          echo "===== ARCHIVOS BACKTEST V6 ====="
-          ls -lah backtest_*v6.csv 2>/dev/null || true
-
-      - name: Guardar resultados del backtest
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'backtest' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: bot-centinela-backtest-v6-${{ github.run_number }}
-          path: |
-            backtest_trades_v6.csv
-            backtest_resumen_v6.csv
-            backtest_comparacion_v6.csv
-            backtest_diagnostico_v6.csv
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Guardar estado del bot
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.modo == 'bot' }}
-        run: |
-          set -e
-
-          echo "============================================"
-          echo "GUARDANDO ESTADO DEL BOT"
-          echo "============================================"
-
-          git config user.name "bot-centinela"
-          git config user.email "bot-centinela@users.noreply.github.com"
-
-          git add -A -- estado_alertas.json señales_log.csv
-
-          if [ -f circuit_breaker_estado.json ]; then
-            git add -A -- circuit_breaker_estado.json
+          git config --global user.name "bot-centinela"
+          git config --global user.email "bot-centinela@users.noreply.github.com"
+          git add estado_alertas.json
+          if [ -f señales_log.csv ]; then
+            git add señales_log.csv
           fi
-
-          echo ""
-          echo "===== ESTADO GIT ====="
-          git status --short
-
-          if git diff --cached --quiet; then
-            echo "No hay cambios de estado para guardar."
-            exit 0
+          if git diff --staged --quiet; then
+            echo "Sin cambios para commitear."
+          else
+            git commit -m "Actualiza estado y log de señales [skip ci]"
+            for intento in 1 2 3 4 5; do
+              git pull --rebase origin main && git push && break
+              echo "Push rechazado (intento $intento), reintentando..."
+              sleep $((RANDOM % 8 + 3))
+            done
           fi
-
-          git commit -m "Actualizar estado Bot Centinela 10X V6.3"
-
-          echo ""
-          echo "===== SINCRONIZANDO CON MAIN ====="
-
-          git fetch origin main
-          git rebase origin/main
-
-          echo ""
-          echo "===== PUBLICANDO ESTADO ====="
-
-          git push origin HEAD:main
-
-          echo ""
-          echo "✅ Estado guardado correctamente."
